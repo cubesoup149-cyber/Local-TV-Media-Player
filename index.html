@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Local Player</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<!-- Left menu: wordmark is temporary, replace the text below -->
+<header id="top">
+  <div class="wm"><span class="crown sm"></span><span>Local Player</span></div>
+  <nav id="nav">
+    <button data-act="view" data-v="movies">Movies</button>
+    <button data-act="view" data-v="videos">Videos</button>
+    <button data-act="view" data-v="files">Files</button>
+    <button data-act="view" data-v="settings">Settings</button>
+  </nav>
+  <div class="foot">
+    <button data-act="addfolder">Add folder</button>
+    <button data-act="addfiles">Add files</button>
+  </div>
+</header>
+
+<main id="main"></main>
+<div id="modal" hidden></div>
+
+<!-- Player -->
+<section id="player" hidden>
+  <video id="vid" playsinline></video>
+  <div id="perr" hidden></div>
+  <div class="ui top"><b id="ptitle"></b><span id="pinfo"></span></div>
+  <div class="ui bot">
+    <input id="seek" type="range" min="0" max="1000" value="0" aria-label="Seek">
+    <div class="ctl">
+      <button id="b-prev" data-act="prev">Previous</button>
+      <button id="b-pp" class="main" data-act="pp">Play</button>
+      <button id="b-next" data-act="next">Next</button>
+      <span id="time">0:00 / 0:00</span>
+      <span class="sp"></span>
+      <button data-act="mute">Volume</button>
+      <input id="vol" type="range" min="0" max="100" value="100" aria-label="Volume">
+      <button id="b-speed" data-act="speed">1×</button>
+      <button data-act="cc">Subtitles</button>
+      <button data-act="fs">Fullscreen</button>
+      <button data-act="close">Close</button>
+    </div>
+  </div>
+</section>
+
+<div id="toast" role="status"></div>
+<input type="file" id="fFolder" webkitdirectory multiple hidden>
+<input type="file" id="fFiles" multiple hidden>
+<script src="app.js"></script>
+</body>
+</html>
