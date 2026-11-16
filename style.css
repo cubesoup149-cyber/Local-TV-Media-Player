@@ -168,3 +168,13 @@ input[type=range]::-moz-range-thumb{width:1.5rem;height:1.5rem;border:0;border-r
 .cand:disabled{opacity:.45}
 .notice{font-size:1.15rem;color:var(--text);margin-bottom:.4rem}
 .tm{flex:none;opacity:.85}.tm img{height:1.1rem;width:auto;display:block}.tm b{font-weight:500;color:var(--mute);font-size:.9rem}
+
+/* Hero slide + position dots */
+.dots{display:flex;gap:.5rem;margin-top:.9rem}
+.dots i{width:.5rem;height:.5rem;border-radius:50%;background:rgba(145,161,178,.4)}
+.dots i.on{width:1.6rem;border-radius:99rem;background:var(--ring)}
+.hero.go .hh{animation:hin .5s ease-out}
+.hero.go .hb{animation:hfade .6s ease-out}
+@keyframes hin{from{opacity:0;transform:translateX(2.5rem)}}
+@keyframes hfade{from{opacity:0}}
+@media (prefers-reduced-motion:reduce){.hero.go .hh,.hero.go .hb{animation:none}}
