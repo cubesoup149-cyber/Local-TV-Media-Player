@@ -147,14 +147,14 @@ const head = (h, p) => `<h1>${h}</h1><p class="lede">${p}</p>`;
 const empty = (h, p) => `<div class="empty"><h2>${h}</h2><p>${p}</p><div class="acts"><button class="btn" data-act="addfolder">Choose folder</button><button class="btn" data-act="addfiles">Choose files</button><button class="btn" data-act="demo">Load demo library</button></div></div>`;
 const hue = it => 198 + [...it.name].reduce((s, c) => s + c.charCodeAt(0), 0) % 19;   // stays inside the blue range
 const resLabel = it => !it.w ? '' : it.w >= 3800 ? '4K' : it.w >= 1900 ? '1080p' : it.w >= 1200 ? '720p' : it.w + '×' + it.h;
-const chips = it => `<span class="chips">${it.w ? `<i>${resLabel(it)}</i>` : ''}<i>${fmtSize(it.size)}</i><i>${extOf(it.name)}</i>${it.demo ? '<i class="demo">Demo entry</i>' : ''}</span>`;
+const chips = it => `<span class="meta">${it.w ? `<span>${resLabel(it)}</span>` : ''}<span>${fmtSize(it.size)}</span><span>${extOf(it.name)}</span>${it.demo ? '<span class="demo">Demo entry</span>' : ''}</span>`;
 const card = it => { const d = disp(it);
-  return `<button class="card" data-act="play" data-id="${it.id}"><span class="poster" style="--h:${hue(it)}">${d.poster ? `<img loading="lazy" decoding="async" alt="" src="${d.poster}">` : '<i class="crown"></i>'}</span>
+  return `<button class="card" data-act="play" data-id="${it.id}"><span class="poster">${d.poster ? `<img loading="lazy" decoding="async" alt="" src="${d.poster}">` : '<i class="crown"></i>'}</span>
   <span class="info"><span class="t">${esc(d.title)}</span><span class="sub">${d.year ? `<span>${d.year}</span>` : ''}<span>${fmtDur(it.dur)}</span></span>${chips(it)}</span></button>`; };
-const tile = it => `<button class="tile" data-act="play" data-id="${it.id}"><span class="thumb" style="--h:${hue(it)}"><b>${fmtT(it.dur)}</b></span><span class="t">${esc(it.title)}</span>${chips(it)}</button>`;
-const dots = it => { const l = list('movie'); return l.length > 1 ? '<div class="dots">' + l.slice(0, 10).map(m => `<i${m === it ? ' class="on"' : ''}></i>`).join('') + '</div>' : ''; };
+const tile = it => `<button class="tile" data-act="play" data-id="${it.id}"><span class="thumb"><b>${fmtT(it.dur)}</b></span><span class="t">${esc(it.title)}</span>${chips(it)}</button>`;
+const dots = it => { const l = list('movie'); return l.length > 1 ? `<div class="pos">${l.indexOf(it) + 1} / ${l.length}</div>` : ''; };
 const hero = it => { const d = disp(it);   // large panel for the focused movie
-  return `${d.poster ? `<img class="hb" alt="" src="${d.poster}">` : ''}<div class="hh"><div class="ht">${esc(d.title)}</div><div class="hm">${d.year ? `<span>${d.year}</span>` : ''}<span>${fmtDur(it.dur)}</span>${it.w ? `<span>${resLabel(it)}</span>` : ''}</div><div class="hf">${esc(it.name)}</div><button class="pri" data-act="play" data-id="${it.id}">Play</button>${dots(it)}</div>`; };
+  return `<div class="hh"><div class="ht">${esc(d.title)}</div><div class="hm">${d.year ? `<span>${d.year}</span>` : ''}<span>${fmtDur(it.dur)}</span>${it.w ? `<span>${resLabel(it)}</span>` : ''}</div><div class="hf">${esc(it.name)}</div><button class="pri" data-act="play" data-id="${it.id}">Play</button>${dots(it)}</div>`; };
 const frow = it => { const v = it.kind === 'movie' || it.kind === 'video';
   const st = v ? 'Plays in video player' : it.kind === 'pending' ? 'Reading details…' : it.kind === 'bad' ? 'Not readable here (unsupported codec or container)' : 'Not a video file';
   return `<button class="frow" data-act="${v ? 'play' : 'nofile'}" data-id="${it.id}"><span>${esc(extOf(it.name) || 'FILE')}</span><span class="n">${esc(it.name)}${it.demo ? ' (demo)' : ''}</span><span>${fmtSize(it.size)}</span><span>${st}</span></button>`; };
@@ -402,4 +402,4 @@ document.addEventListener('keydown', e => {
 window.addEventListener('beforeunload', () => { S.posters.forEach(p => URL.revokeObjectURL(p.url)); });
 applyScale(); render(); loadPosters().then(() => { if (canKeep()) restoreFolders(false); });
 document.querySelector('#nav [aria-current]').focus();
-     
+   
