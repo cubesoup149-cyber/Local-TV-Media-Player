@@ -60,7 +60,7 @@ async function tmdbQuery(t, y) {   // calls our own Netlify function; the browse
   try { j = await r.json(); } catch (e) {}
   if (!r.ok) throw new Error(r.status === 404 && !j ? 'The search function was not found. Deploy to Netlify with functions enabled (see NETLIFY-SETUP.md).' : TMDB_MSG[j && j.error] || 'The search failed. Try again later.');
   if (!j || !Array.isArray(j.results)) throw new Error(TMDB_MSG.bad_response);
-  return j.results.map(x => ({ id: 'tmdb' + x.id, tmdbId: x.id, title: x.title, original: x.originalTitle, year: x.year, poster: x.posterPath ? IMG + x.posterPath : null }));
+  return j.results.map(x => ({ id: 'tmdb' + x.id, tmdbId: x.id, title: x.title, original: x.originalTitle, year: x.year, posterPath: x.posterPath, poster: x.posterPath ? IMG + x.posterPath : null }));   // poster = display URL only (no CORS needed for <img>)
 }
 const PROVIDERS = {
   demo: { label: 'Demo data (test posters, not real artwork)',
@@ -75,7 +75,8 @@ const idb = {   // stores: p = posters, h = saved folder handles
   db: null,
   open() { return this.db || (this.db = new Promise(r => { try { const q = indexedDB.open('lp', 2);
     q.onupgradeneeded = () => { const d = q.result; if (!d.objectStoreNames.contains('p')) d.createObjectStore('p', { keyPath: 'key' }); if (!d.objectStoreNames.contains('h')) d.createObjectStore('h', { keyPath: 'name' }); };
-    q.onsuccess = () => r(q.result); q.onerror = () => r(null); } catch (e) { r(null); } })); },
+    q.onsuccess = () => { q.result.onversionchange = () => q.result.close(); r(q.result); }; q.onerror = q.onblocked = () => r(null); } catch (e) { r(null); } })); },
+  async put(rec) { const d = await this.open(); return !d ? false : new Promise(r => { try { const t = d.transaction('p', 'readwrite'); t.objectStore('p').put(rec); t.oncomplete = () => r(true); t.onerror = t.onabort = () => { console.error('poster save failed', t.error); r(false); }; } catch (e) { console.error('poster save failed', e); r(false); } }); },
   async tx(mode, f, st = 'p') { const d = await this.open(); if (!d) return; return new Promise(r => { const t = d.transaction(st, mode), o = f(t.objectStore(st)); t.oncomplete = () => r(o && o.result); t.onerror = () => r(); }); }
 };
 async function loadPosters() {
@@ -197,15 +198,30 @@ function closeModal() {
   const id = S.modal && S.modal.id; S.modal = null; $('#modal').hidden = true;
   const b = document.querySelector(`[data-act=fetch][data-id="${id}"]`); (b || document.querySelector('#nav [aria-current]')).focus();
 }
+// TMDB posters are downloaded through our same-origin function (/api/tmdb-poster) so browser CORS rules cannot block them.
+async function downloadPoster(c) {
+  const url = c.posterPath ? '/api/tmdb-poster?size=w342&path=' + encodeURIComponent(c.posterPath) : c.poster;   // demo posters are data: URLs
+  let r;
+  try { r = await fetch(url); } catch (e) { throw new Error('Poster download failed: network error (offline or blocked).'); }
+  if (!r.ok) {
+         const isJson = (r.headers.get('content-type') || '').includes('json');
+    throw new Error(r.status === 404 && !isJson ? 'The poster download function was not found. Deploy netlify/functions/tmdb-poster.mjs.' : `Poster download failed (HTTP ${r.status}).`);
+  }
+  const blob = await r.blob();
+  if (!/^image\/(jpeg|png|webp|svg\+xml)/.test(blob.type) || blob.size < 200) throw new Error('The server did not return a valid image.');
+  return blob;
+}
 async function pickPoster(i) {
-  const c = S.modal.cands[i], it = byId(S.modal.id), key = pkey(it);
+  if (S.busy) return; S.busy = true;
   try {
-    const blob = await (await fetch(c.poster)).blob(); if (!/^image\//.test(blob.type)) throw new Error('not an image');
+    const c = S.modal.cands[i], it = byId(S.modal.id), key = pkey(it);
+    let blob;
+    try { blob = await downloadPoster(c); } catch (e) { console.error('poster download', e); toast(e.message, 7000); return; }   // modal stays open for a retry
+    if (!(await idb.put({ key, blob, title: c.title, year: c.year, tmdbId: c.tmdbId || null }))) { toast('The poster downloaded, but the browser could not save it to storage. The crown stays.', 7000); return; }
     const old = S.posters.get(key); if (old) URL.revokeObjectURL(old.url);
-    const saved = await idb.tx('readwrite', s => s.put({ key, blob, title: c.title, year: c.year, tmdbId: c.tmdbId || null }));
     S.posters.set(key, { url: URL.createObjectURL(blob), title: c.title, year: c.year });
-    closeModal(); render(); toast(saved === undefined && !(await idb.open()) ? 'Poster applied for this session only (storage unavailable)' : 'Poster saved');
-  } catch (e) { toast('The poster could not be downloaded. The crown stays.'); }
+    closeModal(); render(); toast('Poster saved');
+  } finally { S.busy = false; }
 }
 
 /* ---------- Player ---------- */
@@ -344,3 +360,4 @@ document.addEventListener('keydown', e => {
 window.addEventListener('beforeunload', () => { S.posters.forEach(p => URL.revokeObjectURL(p.url)); });
 applyScale(); render(); loadPosters().then(() => { if (canKeep()) restoreFolders(false); });
 document.querySelector('#nav [aria-current]').focus();
+                
