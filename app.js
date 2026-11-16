@@ -8,7 +8,7 @@ const pad = n => String(n).padStart(2, '0');
 const MOVIE_MIN = 3600;                       // exactly 60 minutes → Movies
 const VIDEO_EXT = /\.(mp4|m4v|mkv|webm|mov|avi|ts|mpg|mpeg|3gp|ogv|wmv|flv)$/i;
 const SUB_EXT = /\.(vtt|srt)$/i;
-const S = { saved: [], known: [], view: 'movies', items: [], posters: new Map(), pl: null, modal: null, uid: 0 };
+const S = { hi: 0, saved: [], known: [], view: 'movies', items: [], posters: new Map(), pl: null, modal: null, uid: 0 };
 const prefs = { scale: 1, vol: 1 };
 try { Object.assign(prefs, JSON.parse(localStorage.getItem('lp') || '{}')); } catch (e) {}
 const savePrefs = () => { try { localStorage.setItem('lp', JSON.stringify(prefs)); } catch (e) {} };
@@ -152,8 +152,9 @@ const card = it => { const d = disp(it);
   return `<button class="card" data-act="play" data-id="${it.id}"><span class="poster" style="--h:${hue(it)}">${d.poster ? `<img loading="lazy" decoding="async" alt="" src="${d.poster}">` : '<i class="crown"></i>'}</span>
   <span class="info"><span class="t">${esc(d.title)}</span><span class="sub">${d.year ? `<span>${d.year}</span>` : ''}<span>${fmtDur(it.dur)}</span></span>${chips(it)}</span></button>`; };
 const tile = it => `<button class="tile" data-act="play" data-id="${it.id}"><span class="thumb" style="--h:${hue(it)}"><b>${fmtT(it.dur)}</b></span><span class="t">${esc(it.title)}</span>${chips(it)}</button>`;
+const dots = it => { const l = list('movie'); return l.length > 1 ? '<div class="dots">' + l.slice(0, 10).map(m => `<i${m === it ? ' class="on"' : ''}></i>`).join('') + '</div>' : ''; };
 const hero = it => { const d = disp(it);   // large panel for the focused movie
-  return `${d.poster ? `<img class="hb" alt="" src="${d.poster}">` : ''}<div class="hh"><div class="ht">${esc(d.title)}</div><div class="hm">${d.year ? `<span>${d.year}</span>` : ''}<span>${fmtDur(it.dur)}</span>${it.w ? `<span>${resLabel(it)}</span>` : ''}</div><div class="hf">${esc(it.name)}</div><button class="pri" data-act="play" data-id="${it.id}">Play</button></div>`; };
+  return `${d.poster ? `<img class="hb" alt="" src="${d.poster}">` : ''}<div class="hh"><div class="ht">${esc(d.title)}</div><div class="hm">${d.year ? `<span>${d.year}</span>` : ''}<span>${fmtDur(it.dur)}</span>${it.w ? `<span>${resLabel(it)}</span>` : ''}</div><div class="hf">${esc(it.name)}</div><button class="pri" data-act="play" data-id="${it.id}">Play</button>${dots(it)}</div>`; };
 const frow = it => { const v = it.kind === 'movie' || it.kind === 'video';
   const st = v ? 'Plays in video player' : it.kind === 'pending' ? 'Reading details…' : it.kind === 'bad' ? 'Not readable here (unsupported codec or container)' : 'Not a video file';
   return `<button class="frow" data-act="${v ? 'play' : 'nofile'}" data-id="${it.id}"><span>${esc(extOf(it.name) || 'FILE')}</span><span class="n">${esc(it.name)}${it.demo ? ' (demo)' : ''}</span><span>${fmtSize(it.size)}</span><span>${st}</span></button>`; };
@@ -175,7 +176,7 @@ const V = {
       + `<h2>About and credits</h2><div class="line"><div><p class="notice">This product uses the TMDB API but is not endorsed or certified by TMDB.</p><p class="st">Movie data and posters come from TMDB. Only posters you select are saved, on this device.</p></div><span class="tm"><img src="assets/tmdb-logo.svg" alt="TMDB" onerror="this.hidden=true;this.nextElementSibling.hidden=false"><b hidden>TMDB</b></span></div>`; }
 };
 function render() {
-  $('#main').innerHTML = V[S.view]();
+  $('#main').innerHTML = V[S.view](); S.hi = 0; heroTick();
   document.querySelectorAll('#nav button').forEach(b => { b.dataset.v === S.view ? b.setAttribute('aria-current', 'page') : b.removeAttribute('aria-current'); });
 }
 
@@ -204,7 +205,7 @@ async function downloadPoster(c) {
   let r;
   try { r = await fetch(url); } catch (e) { throw new Error('Poster download failed: network error (offline or blocked).'); }
   if (!r.ok) {
-         const isJson = (r.headers.get('content-type') || '').includes('json');
+    const isJson = (r.headers.get('content-type') || '').includes('json');
     throw new Error(r.status === 404 && !isJson ? 'The poster download function was not found. Deploy netlify/functions/tmdb-poster.mjs.' : `Poster download failed (HTTP ${r.status}).`);
   }
   const blob = await r.blob();
@@ -240,7 +241,7 @@ function openPlayer(id) {
   P.hidden = false; V_.volume = prefs.vol; $('#vol').value = prefs.vol * 100; $('#vol').style.setProperty('--p', prefs.vol * 100 + '%'); loadItem(it);
 }
 function loadItem(it) {
-  releaseMedia(); S.pl.it = it; $('#perr').hidden = true;
+  releaseMedia(); S.pl.it = it; S.pl.hasSide = false; S.pl.autoDone = false; $('#perr').hidden = true;
   const d = disp(it);
   $('#ptitle').textContent = d.title;
   $('#pinfo').textContent = [d.year, it.w && it.w + '×' + it.h, extOf(it.name), fmtSize(it.size), it.name].filter(Boolean).join('   ');
@@ -248,11 +249,12 @@ function loadItem(it) {
   if (!it.file) { playErr('This is a demo entry with no media behind it. Choose real files to test playback.'); return; }
   S.pl.url = URL.createObjectURL(it.file); V_.src = S.pl.url; V_.playbackRate = +parseFloat($('#b-speed').textContent) || 1;
   const base = it.path.replace(VIDEO_EXT, ''), sub = S.items.find(s => s.file && SUB_EXT.test(s.name) && s.path.replace(SUB_EXT, '') === base);
+  if (sub) S.pl.hasSide = true;
   if (sub) sub.file.text().then(t => {                       // sidecar .srt/.vtt with the same name
     if (!S.pl || S.pl.it !== it) return;
     const vtt = /^WEBVTT/.test(t) ? t : 'WEBVTT\n\n' + t.replace(/\r/g, '').replace(/(\d\d:\d\d:\d\d),(\d{3})/g, '$1.$2');
     S.pl.sub = URL.createObjectURL(new Blob([vtt], { type: 'text/vtt' }));
-    const tr = document.createElement('track'); tr.kind = 'subtitles'; tr.label = 'Subtitles'; tr.src = S.pl.sub; V_.appendChild(tr); tr.track.mode = 'showing';
+    const tr = document.createElement('track'); tr.kind = 'subtitles'; tr.label = 'Subtitles'; tr.src = S.pl.sub; V_.appendChild(tr); tr.track.mode = 'showing'; syncTracks();
   });
   V_.play().catch(() => {}); showUI(true);
 }
@@ -262,6 +264,20 @@ function closePlayer() {
   if (document.fullscreenElement) document.exitFullscreen();
   const b = document.querySelector(`#main [data-id="${id}"]`); (b || document.querySelector('#nav [aria-current]')).focus();
 }
+// Subtitle and audio tracks. Embedded tracks only appear if the browser exposes them (many browsers do not for MKV/MP4).
+const subTracks = () => [...V_.textTracks].filter(t => t.kind === 'subtitles' || t.kind === 'captions');
+const trackName = (t, i) => t.label || (t.language ? t.language.toUpperCase() : 'Track ' + (i + 1));
+function syncTracks() {
+  const tt = subTracks(), cur = tt.find(t => t.mode === 'showing');
+  $('#b-cc').textContent = 'Subtitles: ' + (cur ? trackName(cur, tt.indexOf(cur)) : tt.length ? 'Off' : 'None');
+  const at = V_.audioTracks ? [...V_.audioTracks] : [], on = at.find(t => t.enabled);
+  $('#b-audio').textContent = at.length > 1 && on ? 'Audio: ' + trackName(on, at.indexOf(on)) : 'Audio';
+}
+function autoSub() {   // like other players: show the file's own subtitle track automatically (the button turns it off)
+  const tt = subTracks();
+  if (!S.pl || S.pl.hasSide || S.pl.autoDone || !tt.length) return;
+  S.pl.autoDone = true; if (!tt.some(t => t.mode === 'showing')) tt[0].mode = 'showing';
+}
 const togglePlay = () => V_.paused ? V_.play().catch(() => {}) : V_.pause();
 const seekBy = d => { V_.currentTime = Math.min(V_.duration || 1e9, Math.max(0, V_.currentTime + d)); };
 const setVol = p => { V_.volume = Math.min(1, Math.max(0, p / 100)); V_.muted = false; $('#vol').value = V_.volume * 100; $('#vol').style.setProperty('--p', V_.volume * 100 + '%'); prefs.vol = V_.volume; savePrefs(); };
@@ -269,7 +285,10 @@ const step = d => { const l = S.pl.list, n = l[l.indexOf(S.pl.it) + d]; n ? load
 const toggleFs = () => { if (document.fullscreenElement) document.exitFullscreen(); else { const r = P.requestFullscreen || P.webkitRequestFullscreen; r ? r.call(P) : toast('Fullscreen is not available here'); } };
 function updTime() { const d = V_.duration; $('#time').textContent = fmtT(V_.currentTime) + ' / ' + fmtT(d); if (d) { const v = V_.currentTime / d * 1000; $('#seek').value = v; $('#seek').style.setProperty('--p', v / 10 + '%'); } }
 V_.addEventListener('timeupdate', updTime);
-V_.addEventListener('loadedmetadata', updTime);
+V_.addEventListener('loadedmetadata', () => { updTime(); autoSub(); syncTracks(); });
+V_.textTracks.addEventListener('addtrack', () => { autoSub(); syncTracks(); });
+V_.textTracks.addEventListener('change', syncTracks);
+if (V_.audioTracks) { V_.audioTracks.addEventListener('addtrack', syncTracks); V_.audioTracks.addEventListener('change', syncTracks); }
 V_.addEventListener('play', () => { $('#b-pp').textContent = 'Pause'; showUI(); });
 V_.addEventListener('pause', () => { $('#b-pp').textContent = 'Play'; clearTimeout(S.hide); P.classList.remove('idle'); });
 V_.addEventListener('ended', () => { const l = S.pl && S.pl.list; if (l && l.indexOf(S.pl.it) < l.length - 1) step(1); });
@@ -279,7 +298,22 @@ V_.addEventListener('error', () => { if (S.pl && S.pl.url) playErr(V_.error && V
 V_.addEventListener('click', togglePlay);
 $('#seek').addEventListener('input', e => { e.target.style.setProperty('--p', e.target.value / 10 + '%'); if (V_.duration) V_.currentTime = e.target.value / 1000 * V_.duration; });
 $('#vol').addEventListener('input', e => setVol(+e.target.value));
-document.addEventListener('focusin', e => { const c = e.target.closest && e.target.closest('.card'), h = $('#hero'); if (c && h) { const it = byId(+c.dataset.id); if (it) h.innerHTML = hero(it); } });
+// Hero: slides to the next movie every 6 s, but only while idle (not browsing cards, no player/dialog open, tab visible).
+let heroT;
+const heroStop = () => clearTimeout(heroT);
+const heroOk = () => S.view === 'movies' && $('#hero') && P.hidden && $('#modal').hidden && !document.hidden && !(document.activeElement && document.activeElement.closest && document.activeElement.closest('.card'));
+function heroShow(it, anim) {
+  const h = $('#hero'); if (!h) return;
+  S.hi = Math.max(0, list('movie').indexOf(it)); h.innerHTML = hero(it);
+  if (anim) { h.classList.remove('go'); void h.offsetWidth; h.classList.add('go'); }
+}
+function heroTick() {
+  heroStop(); const l = list('movie'); if (l.length < 2 || !heroOk()) return;
+  heroT = setTimeout(() => { if (!heroOk()) return; S.hi = (S.hi + 1) % l.length; heroShow(l[S.hi], true); heroTick(); }, 6000);
+}
+document.addEventListener('focusin', e => { const c = e.target.closest && e.target.closest('.card'); if (c && $('#hero')) { heroStop(); const it = byId(+c.dataset.id); if (it) heroShow(it, false); } });
+document.addEventListener('focusout', e => { if (!(e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest('.card'))) setTimeout(heroTick, 0); });
+document.addEventListener('visibilitychange', () => document.hidden ? heroStop() : heroTick());
 P.addEventListener('mousemove', e => { if (e.movementX !== 0 || e.movementY !== 0) showUI(); });
 
 /* ---------- Actions (event delegation) ---------- */
@@ -304,7 +338,15 @@ const ACT = {
   pp: togglePlay, prev: () => step(-1), next: () => step(1), fs: toggleFs, close: closePlayer,
   mute: () => { V_.muted = !V_.muted; toast(V_.muted ? 'Muted' : 'Sound on'); },
   speed: b => { const i = (SPEEDS.indexOf(V_.playbackRate) + 1) % SPEEDS.length; V_.playbackRate = SPEEDS[i]; b.textContent = SPEEDS[i] + '×'; },
-  cc: () => { const t = V_.textTracks[0]; if (!t) return toast('No subtitles found. Add a .srt or .vtt with the same name as the video.'); t.mode = t.mode === 'showing' ? 'hidden' : 'showing'; }
+  cc: () => {   // cycle: Off, track 1, track 2 ... Off
+    const tt = subTracks(); if (!tt.length) return toast('No subtitle tracks are available. Browsers often cannot read subtitles stored inside MKV or MP4 files. A .srt or .vtt with the same name next to the video works.', 6000);
+    const n = tt.findIndex(t => t.mode === 'showing') + 1; tt.forEach((t, k) => { t.mode = k === n ? 'showing' : 'hidden'; }); syncTracks();
+  },
+  audio: () => {
+    if (!V_.audioTracks) return toast("This browser can't switch audio tracks stored inside a video file. The Android app will support it.", 6000);
+    const at = [...V_.audioTracks]; if (at.length < 2) return toast('This video has only one audio track.');
+    const n = (at.findIndex(t => t.enabled) + 1) % at.length; at.forEach((t, k) => { t.enabled = k === n; }); syncTracks(); toast('Audio: ' + trackName(at[n], n));
+  }
 };
 document.addEventListener('click', e => {
   const b = e.target.closest('[data-act]'); if (!b) return;
@@ -360,4 +402,4 @@ document.addEventListener('keydown', e => {
 window.addEventListener('beforeunload', () => { S.posters.forEach(p => URL.revokeObjectURL(p.url)); });
 applyScale(); render(); loadPosters().then(() => { if (canKeep()) restoreFolders(false); });
 document.querySelector('#nav [aria-current]').focus();
-                
+     
